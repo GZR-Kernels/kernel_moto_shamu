@@ -1,18 +1,12 @@
 /*
   USB Driver layer for GSM modems
-
   Copyright (C) 2005  Matthias Urlichs <smurf@smurf.noris.de>
-
   This driver is free software; you can redistribute it and/or modify
   it under the terms of Version 2 of the GNU General Public License as
   published by the Free Software Foundation.
-
   Portions copied from the Keyspan driver by Hugh Blemings <hugh@blemings.org>
-
   History: see the git log.
-
   Work sponsored by: Sigos GmbH, Germany <info@sigos.de>
-
   This driver exists because the "normal" serial driver doesn't work too well
   with GSM modems. Issues:
   - data loss -- one single Receive URB is not nearly enough
@@ -615,7 +609,7 @@ int usb_wwan_port_probe(struct usb_serial_port *port)
 	spin_lock_init(&portdata->in_lock);
 
 	for (i = 0; i < N_IN_URB; i++) {
-		buffer = (u8 *)__get_free_page(GFP_KERNEL);
+		buffer = kmalloc(IN_BUFLEN, GFP_KERNEL);
 		if (!buffer)
 			goto bail_out_error;
 		portdata->in_buffer[i] = buffer;
@@ -726,20 +720,17 @@ static void stop_read_write_urbs(struct usb_serial *serial)
 int usb_wwan_suspend(struct usb_serial *serial, pm_message_t message)
 {
 	struct usb_wwan_intf_private *intfdata = serial->private;
-	int b;
-
-	if (PMSG_IS_AUTO(message)) {
-		spin_lock_irq(&intfdata->susp_lock);
-		b = intfdata->in_flight;
-		spin_unlock_irq(&intfdata->susp_lock);
-
-		if (b || pm_runtime_autosuspend_expiration(&serial->dev->dev))
-			return -EBUSY;
-	}
 
 	spin_lock_irq(&intfdata->susp_lock);
+	if (PMSG_IS_AUTO(message)) {
+		if (intfdata->in_flight) {
+			spin_unlock_irq(&intfdata->susp_lock);
+			return -EBUSY;
+		}
+	}
 	intfdata->suspended = 1;
 	spin_unlock_irq(&intfdata->susp_lock);
+
 	stop_read_write_urbs(serial);
 
 	return 0;
@@ -843,10 +834,8 @@ int usb_wwan_resume(struct usb_serial *serial)
 	}
 	spin_unlock_irq(&intfdata->susp_lock);
 
-	if (err_count)
-		return -EIO;
-
-	return 0;
+err_out:
+	return err;
 }
 EXPORT_SYMBOL(usb_wwan_resume);
 #endif
