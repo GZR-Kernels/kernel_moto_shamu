@@ -2393,6 +2393,31 @@ static struct kernel_param_ops module_ops = {
 module_param_cb(enabled, &module_ops, &enabled, 0644);
 MODULE_PARM_DESC(enabled, "enforce thermal limit on cpu");
 
+static int set_cx_enabled(const char *val, const struct kernel_param *kp)
+{
+        int ret = 0;
+
+        if (*val == '0' || *val == 'n' || *val == 'N') {
+                cx_phase_ctrl_enabled = 0;
+        } else {
+                if (!cx_phase_ctrl_enabled) {
+                        cx_phase_ctrl_enabled = 1;
+                }
+        }
+        pr_info("cx enabled = %d\n", cx_phase_ctrl_enabled);
+
+        return ret;
+}
+
+static struct kernel_param_ops cx_module_ops = {
+        .set = set_cx_enabled,
+        .get = param_get_bool,
+};
+
+module_param_cb(cx_cond_enabled, &cx_module_ops,
+                &cx_phase_ctrl_enabled, 0644);
+MODULE_PARM_DESC(cx_cond_enabled, "cx phase cond enabled");
+
 static ssize_t show_cc_enabled(struct kobject *kobj,
 		struct kobj_attribute *attr, char *buf)
 {
