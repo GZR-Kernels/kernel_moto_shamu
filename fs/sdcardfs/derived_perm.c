@@ -148,6 +148,7 @@ void get_derived_permission(struct dentry *parent, struct dentry *dentry)
 	get_derived_permission_new(parent, dentry, &dentry->d_name);
 }
 
+<<<<<<< HEAD
 static appid_t get_type(const char *name)
 {
 	const char *ext = strrchr(name, '.');
