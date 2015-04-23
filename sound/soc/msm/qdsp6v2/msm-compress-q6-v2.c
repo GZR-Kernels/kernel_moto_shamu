@@ -1,4 +1,4 @@
-/* Copyright (c) 2012-2017, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012-2016, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -143,6 +143,8 @@ struct msm_compr_audio {
 	uint32_t stream_available;
 	uint32_t next_stream;
 
+	uint64_t marker_timestamp;
+
 	struct msm_compr_gapless_state gapless_state;
 
 	atomic_t start;
@@ -155,7 +157,6 @@ struct msm_compr_audio {
 
 	wait_queue_head_t eos_wait;
 	wait_queue_head_t drain_wait;
-	wait_queue_head_t flush_wait;
 	wait_queue_head_t close_wait;
 	wait_queue_head_t wait_for_stream_avail;
 
@@ -479,7 +480,6 @@ static void compr_event_handler(uint32_t opcode,
 			pr_debug("token 0x%x, stream id %d\n", token,
 				  STREAM_ID_FROM_TOKEN(token));
 			prtd->cmd_ack = 1;
-			wake_up(&prtd->flush_wait);
 			break;
 		case ASM_DATA_CMD_REMOVE_INITIAL_SILENCE:
 			pr_debug("%s: ASM_DATA_CMD_REMOVE_INITIAL_SILENCE:",
@@ -918,7 +918,6 @@ static int msm_compr_open(struct snd_compr_stream *cstream)
 
 	init_waitqueue_head(&prtd->eos_wait);
 	init_waitqueue_head(&prtd->drain_wait);
-	init_waitqueue_head(&prtd->flush_wait);
 	init_waitqueue_head(&prtd->close_wait);
 	init_waitqueue_head(&prtd->wait_for_stream_avail);
 
@@ -1011,7 +1010,6 @@ static int msm_compr_free(struct snd_compr_stream *cstream)
 	kfree(pdata->audio_effects[soc_prtd->dai_link->be_id]);
 	kfree(pdata->dec_params[soc_prtd->dai_link->be_id]);
 	kfree(prtd);
-	runtime->private_data = NULL;
 
 	return 0;
 }
@@ -1300,14 +1298,6 @@ static int msm_compr_trigger(struct snd_compr_stream *cstream, int cmd)
 							__func__, rc);
 				return rc;
 			}
-			rc = wait_event_timeout(prtd->flush_wait,
-					prtd->cmd_ack, 1 * HZ);
-			if (!rc) {
-				rc = -ETIMEDOUT;
-				pr_err("Flush cmd timeout\n");
-			} else {
-				rc = 0; /* prtd->cmd_status == OK? 0 : -EPERM*/
-			}
 			spin_lock_irqsave(&prtd->lock, flags);
 		} else {
 			prtd->first_buffer = 0;
@@ -1319,6 +1309,7 @@ static int msm_compr_trigger(struct snd_compr_stream *cstream, int cmd)
 		prtd->bytes_received = 0;
 		prtd->bytes_sent = 0;
 		prtd->dsp_fragments_sent = 0;
+		prtd->marker_timestamp = 0;
 
 		atomic_set(&prtd->xrun, 0);
 		spin_unlock_irqrestore(&prtd->lock, flags);
@@ -1454,6 +1445,8 @@ static int msm_compr_trigger(struct snd_compr_stream *cstream, int cmd)
 			prtd->last_buffer = 0;
 			prtd->gapless_state.gapless_transition = 1;
 			prtd->dsp_fragments_sent = 0;
+			prtd->marker_timestamp = 0;
+
 			/*
 			Don't reset these as these vars map to
 			total_bytes_transferred and total_bytes_available
@@ -1510,23 +1503,23 @@ static int msm_compr_trigger(struct snd_compr_stream *cstream, int cmd)
 			q6asm_stream_cmd_nowait(ac, CMD_PAUSE, ac->stream_id);
 			prtd->cmd_ack = 0;
 			spin_unlock_irqrestore(&prtd->lock, flags);
-			pr_debug("%s:issue CMD_FLUSH ac->stream_id %d",
-					      __func__, ac->stream_id);
-			q6asm_stream_cmd(ac, CMD_FLUSH, ac->stream_id);
-			wait_event_timeout(prtd->flush_wait,
-					   prtd->cmd_ack, 1 * HZ / 4);
 
+			/*
+			 * Cache this time as last known time
+			 */
+			q6asm_get_session_time(prtd->audio_client,
+					       &prtd->marker_timestamp);
 			spin_lock_irqsave(&prtd->lock, flags);
 			/*
-			Don't reset these as these vars map to
-			total_bytes_transferred and total_bytes_available
-			directly, only total_bytes_transferred will be updated
-			in the next avail() ioctl
-			prtd->copied_total = 0;
-			prtd->bytes_received = 0;
-			do not reset prtd->bytes_sent as well as the same
-			session is used for gapless playback
-			*/
+			 * Don't reset these as these vars map to
+			 * total_bytes_transferred and total_bytes_available.
+			 * Just total_bytes_transferred will be updated
+			 * in the next avail() ioctl.
+			 * prtd->copied_total = 0;
+			 * prtd->bytes_received = 0;
+			 * do not reset prtd->bytes_sent as well as the same
+			 * session is used for gapless playback
+			 */
 			prtd->byte_offset = 0;
 
 			prtd->app_pointer  = 0;
@@ -1535,8 +1528,13 @@ static int msm_compr_trigger(struct snd_compr_stream *cstream, int cmd)
 			prtd->dsp_fragments_sent = 0;
 			atomic_set(&prtd->drain, 0);
 			atomic_set(&prtd->xrun, 1);
-			q6asm_run_nowait(prtd->audio_client, 0, 0, 0);
 			spin_unlock_irqrestore(&prtd->lock, flags);
+
+			pr_debug("%s:issue CMD_FLUSH ac->stream_id %d",
+					      __func__, ac->stream_id);
+			q6asm_stream_cmd(ac, CMD_FLUSH, ac->stream_id);
+
+			q6asm_run_nowait(prtd->audio_client, 0, 0, 0);
 		}
 		prtd->cmd_interrupt = 0;
 		break;
@@ -1683,6 +1681,8 @@ static int msm_compr_pointer(struct snd_compr_stream *cstream,
 			else
 				return -EAGAIN;
 		}
+	} else {
+		timestamp = prtd->marker_timestamp;
 	}
 
 	/* DSP returns timestamp in usec */
