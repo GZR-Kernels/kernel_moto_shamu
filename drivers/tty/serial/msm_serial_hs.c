@@ -295,15 +295,15 @@ static int msm_hs_ioctl(struct uart_port *uport, unsigned int cmd,
 
 	switch (cmd) {
 	case MSM_ENABLE_UART_CLOCK: {
-		MSM_HS_DBG("%s():ENABLE UART CLOCK: cmd=%d, ioc %d\n", __func__,
-			cmd, ioctl_count);
+		MSM_HS_INFO("%s():ENABLE UART CLOCK: cmd=%d, ioc %d\n",
+			__func__, cmd, ioctl_count);
 		atomic_inc(&msm_uport->ioctl_count);
 		msm_hs_request_clock_on(&msm_uport->uport);
 		break;
 	}
 	case MSM_DISABLE_UART_CLOCK: {
-		MSM_HS_DBG("%s():DISABLE UART CLOCK: cmd=%d ioc %d\n", __func__,
-			cmd, ioctl_count);
+		MSM_HS_INFO("%s():DISABLE UART CLOCK: cmd=%d ioc %d\n",
+			__func__, cmd, ioctl_count);
 		if (ioctl_count <= 0) {
 			MSM_HS_WARN("%s():ioctl count -ve, client check voting",
 				__func__);
@@ -320,7 +320,7 @@ static int msm_hs_ioctl(struct uart_port *uport, unsigned int cmd,
 		if (msm_uport->pm_state != MSM_HS_PM_ACTIVE)
 			state = 0;
 		ret = state;
-		MSM_HS_DBG("%s():GET UART CLOCK STATUS: cmd=%d state=%d\n",
+		MSM_HS_INFO("%s():GET UART CLOCK STATUS: cmd=%d state=%d\n",
 			__func__, cmd, state);
 		break;
 	}
@@ -2474,9 +2474,9 @@ static int msm_hs_startup(struct uart_port *uport)
 					IRQF_TRIGGER_FALLING | IRQF_ONESHOT,
 					"msm_hs_wakeup", msm_uport);
 		if (unlikely(ret)) {
-			MSM_HS_ERR("%s():Err getting uart wakeup_irq\n",
-				  __func__);
-			goto free_uart_irq;
+			MSM_HS_ERR("%s():Err getting uart wakeup_irq %d\n",
+				  __func__, ret);
+			goto unvote_exit;
 		}
 
 		msm_uport->wakeup.freed = false;
@@ -2494,7 +2494,7 @@ static int msm_hs_startup(struct uart_port *uport)
 	ret = msm_hs_config_uart_gpios(uport);
 	if (ret) {
 		MSM_HS_ERR("Uart GPIO request failed\n");
-		goto deinit_uart_clk;
+		goto free_uart_irq;
 	}
 
 	msm_hs_write(uport, UART_DM_DMEN, 0);
@@ -2599,7 +2599,7 @@ unconfig_uart_gpios:
 	msm_hs_unconfig_uart_gpios(uport);
 free_uart_irq:
 	free_irq(uport->irq, msm_uport);
-deinit_uart_clk:
+unvote_exit:
 	msm_hs_resource_unvote(msm_uport);
 	MSM_HS_ERR("%s(): Error return\n", __func__);
 	return ret;
