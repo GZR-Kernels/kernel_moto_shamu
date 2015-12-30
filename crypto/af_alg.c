@@ -273,10 +273,8 @@ int af_alg_accept(struct sock *sk, struct socket *newsock)
 	sock_graft(sk2, newsock);
 
 	err = type->accept(ask->private, sk2);
-	if (err) {
-		sk_free(sk2);
+	if (err)
 		goto unlock;
-	}
 
 	sk2->sk_family = PF_ALG;
 
