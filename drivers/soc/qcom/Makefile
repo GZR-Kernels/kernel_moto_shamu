@@ -12,6 +12,7 @@ obj-$(CONFIG_MSM_QMI_INTERFACE) += qmi_interface.o
 
 obj-$(CONFIG_MSM_SCM) += scm.o
 
+obj-$(CONFIG_AUTOSMP)			+= autosmp.o
 obj-$(CONFIG_MSM_SMEM) += smem.o smem_debug.o
 obj-$(CONFIG_MSM_SMEM_LOGGING) += smem_log.o
 obj-$(CONFIG_MSM_WATCHDOG_V2) += watchdog_v2.o
