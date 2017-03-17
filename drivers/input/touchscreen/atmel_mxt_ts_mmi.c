@@ -31,10 +31,6 @@
 #include <linux/semaphore.h>
 #include <linux/atomic.h>
 
-#ifdef CONFIG_STATE_NOTIFIER
-#include <linux/state_notifier.h>
-#endif
-
 enum {
 	STATE_UNKNOWN,
 	STATE_ACTIVE,
@@ -2466,7 +2462,7 @@ static void mxt_set_sensor_state(struct mxt_data *data, int state)
 	case STATE_UNKNOWN:
 	case STATE_FLASH:
 		/* no special handling for these states */
-		break;
+			break;
 
 	case STATE_SUSPEND:
 		if (!data->mode_is_wakeable)
@@ -2474,11 +2470,7 @@ static void mxt_set_sensor_state(struct mxt_data *data, int state)
 		data->enable_reporting = false;
 		if (!data->in_bootloader)
 			mxt_sensor_state_config(data, SUSPEND_IDX);
-#ifdef CONFIG_STATE_NOTIFIER
-		if (!use_fb_notifier)
-			state_notifier_call_chain(STATE_NOTIFIER_SUSPEND, NULL);
-#endif
-		break;
+			break;
 
 	case STATE_ACTIVE:
 		if (!data->in_bootloader)
@@ -2489,28 +2481,24 @@ static void mxt_set_sensor_state(struct mxt_data *data, int state)
 			mxt_restore_default_mode(data);
 			pr_debug("Non-persistent mode; restoring default\n");
 		}
-#ifdef CONFIG_STATE_NOTIFIER
-		if (!use_fb_notifier)
-			state_notifier_call_chain(STATE_NOTIFIER_ACTIVE, NULL);
-#endif
-		break;
+			break;
 
 	case STATE_STANDBY:
 		mxt_irq_enable(data, false);
-		break;
+			break;
 
 	case STATE_BL:
 		if (!data->in_bootloader)
 			data->in_bootloader = true;
 
 		mxt_irq_enable(data, false);
-		break;
+			break;
 
 	case STATE_INIT:
 		/* set flag to avoid object specific message handling */
 		if (!data->in_bootloader)
 			data->in_bootloader = true;
-		break;
+			break;
 	}
 
 	pr_debug("state change %s -> %s\n", mxt_state_name(current_state),
