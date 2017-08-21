@@ -726,7 +726,6 @@ static bool can_stop_idle_tick(int cpu, struct tick_sched *ts)
 
 	if (unlikely(ts->nohz_mode == NOHZ_MODE_INACTIVE))
 		return false;
-	}
 
 	if (need_resched())
 		return false;
@@ -1030,10 +1029,8 @@ static void tick_nohz_kick_tick(int cpu, ktime_t now)
 {
 #if 0
 	/* Switch back to 2.6.27 behaviour */
-
 	struct tick_sched *ts = &per_cpu(tick_cpu_sched, cpu);
 	ktime_t delta;
-
 	/*
 	 * Do not touch the tick device, when the next expiry is either
 	 * already reached or less/equal than the tick period.
@@ -1041,7 +1038,6 @@ static void tick_nohz_kick_tick(int cpu, ktime_t now)
 	delta =	ktime_sub(hrtimer_get_expires(&ts->sched_timer), now);
 	if (delta.tv64 <= tick_period.tv64)
 		return;
-
 	tick_nohz_restart(ts, now);
 #endif
 }
