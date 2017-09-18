@@ -2262,7 +2262,7 @@ void msm_hs_set_clock(int port_index, int on)
 		msm_hs_set_mctrl(uport, TIOCM_RTS);
 	} else {
 		msm_hs_set_mctrl(uport, 0);
-		msm_hs_request_clock_off(uport);
+		//msm_hs_request_clock_off(uport);
 	}
 }
 EXPORT_SYMBOL(msm_hs_set_clock);
