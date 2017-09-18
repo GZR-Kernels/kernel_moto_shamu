@@ -3417,6 +3417,10 @@ static int __init msm_serial_hs_init(void)
 	}
 
 	MSM_HS_INFO("msm_serial_hs module loaded\n");
+
+	/* ADSPD uses ttyHS3 for voice-call processing */
+	msm_hs_set_clock(3, 1);
+
 	return ret;
 }
 
